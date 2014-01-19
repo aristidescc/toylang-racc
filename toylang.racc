@@ -1,0 +1,89 @@
+class ToyLang
+	# precedence
+	prechigh
+		nonassoc UMINUS
+		left tmul tdiv tmod
+		left tplus tminus
+	preclow
+	# tokens
+	token identifier double integer tequal tceq tcne tclt tcle tcgt tcge
+			tlparen trparen tlbrace trbrace tdot tcomma 
+			tplus tminus tmul tdiv tmod tprint typeint typedbl treturn
+	# expect
+	# options
+	# convert
+	# start
+	start program
+rule
+
+program : stmts { result = val[0] }
+
+stmts : stmt { result = Block.new(val[0])  }
+	  | stmts stmt { val[0].statements << val[1] }
+
+stmt : var_decl 
+	 | func_decl 
+	 | assignment
+	 | method_call
+	 | print
+	 | return
+
+block : tlbrace stmts trbrace { result = val[1] }
+   	  | tlbrace trbrace { result = Block.new }
+
+type : typeint | typedbl
+
+var_decl : type identifier { result = VariableDeclaration.new(val[0], val[1])  }
+		 | type identifier tequal expr { result = VariableDeclaration.new(val[0], val[1], val[3]) }
+
+func_decl : type identifier tlparen func_decl_args trparen block
+				{ result = FunctionDeclaration.new(val[0], val[1], val[3], val[5]) }
+
+func_decl_args : /* blank */  { result = Array.new }
+			   | var_decl { result = Array.new; result << val[0] }
+			   | func_decl_args tcomma var_decl { val[0] << val[2] }
+
+assignment : identifier tequal expr { result = Assignment.new(val[0], val[2]) }
+
+numeric : integer { result = IntegerLiteral.new(val[0]) }
+		| tminus integer { result = IntegerLiteral.new(-(val[1])) }
+		| double { result = DoubleLiteral.new(val[0]) }
+		| tminus double { result = DoubleLiteral.new(-(val[1])) }
+
+expr : identifier { result = VarReference.new(val[0]) }
+	 | expr tplus expr { result = BinaryOperation.new(val[0], val[1], val[2]) }
+	 | expr tminus expr { result = BinaryOperation.new(val[0], val[1], val[2]) }
+	 | expr tmul expr { result = BinaryOperation.new(val[0], val[1], val[2]) }
+	 | expr tdiv expr { result = BinaryOperation.new(val[0], val[1], val[2]) }
+	 | expr tmod expr { result = BinaryOperation.new(val[0], val[1], val[2]) }
+	 | expr comparison expr { result = BinaryComparison.new(val[0], val[1], val[2]) }
+	 | tlparen expr trparen { result = val[1] }
+ 	 | numeric
+
+valued_construction : expr | method_call | assignment
+
+method_call : identifier tlparen call_args trparen 
+					{ result = MethodCall.new(val[0], val[2]) }
+
+call_args : /* Blank */ { result = Array.new }
+		  | expr { result = Array.new; result << val[0] }
+		  | call_args tcomma expr { val[0] << val[2] }
+
+comparison : tceq | tcne | tclt | tcle | tcgt | tcge
+
+print : tprint valued_construction { result = PrintStatement.new(val[1]) }
+
+return : treturn valued_construction { result = ReturnStatement.new(val[1]) }
+
+end
+---- header ----
+require "./nodes"
+require "./toylang.rex"
+---- inner ----
+---- footer ----
+exit  if ARGV.size == 0
+filename = ARGV.shift
+
+parser = ToyLang.new
+ast = parser.scan_file filename
+ast.print
